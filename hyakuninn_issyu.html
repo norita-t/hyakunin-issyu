@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>百人一首 暗記</title>
+    <style>
+        :root { --bg: #fdfaf1; --accent: #8b4513; --text: #333; --card-bg: #ffffff; --warn: #f1c40f; --bad: #e74c3c; --good: #2ecc71; }
+        body { font-family: "Sawarabi Mincho", serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        .page { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        .active { display: flex; }
+        .setting-group { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 100%; max-width: 340px; margin-bottom: 15px; }
+        .setting-item { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 3px; font-weight: bold; font-size: 0.85rem; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 1rem; }
+        #card-container { position: relative; width: 100%; max-width: 320px; height: 50vh; margin-bottom: 20px; flex-shrink: 0; }
+        #card { background: var(--card-bg); width: 100%; height: 100%; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; padding: 20px; cursor: pointer; border: 2px solid var(--accent); box-sizing: border-box; position: relative; }
+        .poem-text { writing-mode: vertical-rl; font-size: 1.4rem; line-height: 2.0; letter-spacing: 0.15rem; height: 85%; text-align: start; }
+        .label { position: absolute; top: 15px; left: 15px; font-size: 0.8rem; color: var(--accent); border: 1px solid var(--accent); padding: 2px 8px; border-radius: 4px; }
+        #mark-btn { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border-radius: 50%; border: 2px solid #ddd; background: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; z-index: 10; }
+        .mark-none { border-color: #ddd !important; color: #ddd; }
+        .mark-warn { border-color: var(--warn) !important; color: var(--warn); background: #fef9e7 !important; }
+        .mark-bad  { border-color: var(--bad) !important; color: var(--bad); background: #fdedec !important; }
+        .mark-good { border-color: var(--good) !important; color: var(--good); background: #eafaf1 !important; }
+        .result-card { background: white; padding: 20px; border-radius: 15px; width: 100%; max-width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 15px 0; }
+        .stat-item { padding: 8px; border-radius: 8px; font-size: 0.85rem; }
+        .bad-list { text-align: left; max-height: 120px; overflow-y: auto; font-size: 0.8rem; background: #f8f8f8; padding: 10px; border-radius: 5px; margin-top: 10px; border: 1px solid #eee; }
+        button { width: 100%; max-width: 240px; padding: 15px; border: none; border-radius: 30px; background: var(--accent); color: white; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 0 #5d2e0d; margin-top: 10px; flex-shrink: 0; }
+        button:active { transform: translateY(2px); box-shadow: none; }
+        .secondary-btn { background: #666; box-shadow: 0 4px 0 #333; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="setup-page" class="page active">
+        <h2 style="margin: 0 0 10px 0;">練習の設定</h2>
+        <div class="setting-group">
+            <div class="setting-item">
+                <label>出題範囲 (1〜100)</label>
+                <div style="display:flex; align-items:center; gap:5px;">
+                    <input type="number" id="range-start" value="1" min="1" max="100">
+                    <span>〜</span>
+                    <input type="number" id="range-end" value="100" min="1" max="100">
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>番号の絞り込み</label>
+                <select id="number-filter">
+                    <option value="all">すべて</option>
+                    <option value="odd">奇数番のみ</option>
+                    <option value="even">偶数番のみ</option>
+                </select>
+            </div>
+            <div class="setting-item"><label>モード</label><select id="quiz-mode"><option value="kami-to-simo">上の句 → 下の句</option><option value="simo-to-kami">下の句 → 上の句</option></select></div>
+            <div class="setting-item"><label>順序</label><select id="order-mode"><option value="random">ランダム</option><option value="sequential">番号順</option></select></div>
+            <div class="setting-item"><label>マークで絞り込み</label>
+                <select id="filter-mark">
+                    <option value="all">すべて</option>
+                    <option value="warn">黄色のみ</option>
+                    <option value="bad">赤色のみ</option>
+                    <option value="good">緑色のみ</option>
+                </select>
+            </div>
+        </div>
+        <button onclick="startLearning()">暗記を始める</button>
+    </div>
+
+    <div id="learning-page" class="page">
+        <div style="margin-bottom: 8px; font-size: 0.85rem;"><span id="progress-text">0 / 0</span></div>
+        <div id="card-container">
+            <div id="mark-btn" onclick="toggleMark(event)" class="mark-none">★</div>
+            <div id="card" onclick="toggleAnswer()">
+                <span class="label" id="poem-id"></span>
+                <div id="display-text" class="poem-text"></div>
+            </div>
+        </div>
+        <button id="next-btn" onclick="nextPoem()">次の歌へ</button>
+        <button class="secondary-btn" onclick="showSetup()">設定に戻る</button>
+    </div>
+
+    <div id="result-page" class="page">
+        <div class="result-card">
+            <h3 style="margin:0 0 5px 0;">一周しました！</h3>
+            <div id="result-summary" style="font-size:0.85rem;"></div>
+            <div class="stat-grid">
+                <div class="stat-item" style="background:#fdedec; color:var(--bad);">赤色: <span id="stat-bad">0</span></div>
+                <div class="stat-item" style="background:#fef9e7; color:var(--warn);">黄色: <span id="stat-warn">0</span></div>
+                <div class="stat-item" style="background:#eafaf1; color:var(--good);">緑色: <span id="stat-good">0</span></div>
+                <div class="stat-item" style="background:#f5f5f5;">未設定: <span id="stat-none">0</span></div>
+            </div>
+            <div style="text-align:left; font-size:0.85rem; font-weight:bold;">赤色の句一覧:</div>
+            <div id="bad-list" class="bad-list"></div>
+        </div>
+        <button onclick="startLearning()">もう一度練習する</button>
+        <button class="secondary-btn" onclick="showSetup()">設定に戻る</button>
+    </div>
+
+    <script>
+        const poemsData = [
+            {id:1, kami:"秋の田の かりほの庵の 苫をあらみ", simo:"わが衣手は 露にぬれつつ"},
+            {id:2, kami:"春すぎて 夏来にけらし 白妙の", simo:"衣ほすてふ 天の香具山"},
+            {id:3, kami:"足びきの 山鳥の尾の しだり尾の", simo:"ながながし夜を ひとりかも寝む"},
+            {id:4, kami:"田子の浦に うち出でて見れば 白妙の", simo:"富士の高嶺に 雪は降りつつ"},
+            {id:5, kami:"奥山に 紅葉ふみわけ 鳴く鹿の", simo:"声きく時ぞ 秋は悲しき"},
+            {id:6, kami:"かささぎの 渡せる橋に おく霜の", simo:"白きを見れば 夜ぞふけにける"},
+            {id:7, kami:"天の原 ふりさけ見れば 春日なる", simo:"三笠の山に 出でし月かも"},
+            {id:8, kami:"わが庵は 都のたつみ しかぞすむ", simo:"世をうぢ山と 人はいふなり"},
+            {id:9, kami:"花の色は うつりにけりな いたづらに", simo:"わが身世にふる ながめせしまに"},
+            {id:10, kami:"これやこの 行くも帰るも わかれては", simo:"知るも知らないも あふ坂の関"},
+            {id:11, kami:"わたの原 八十島かけて 漕ぎ出でぬと", simo:"人には告げよ あまの釣舟"},
+            {id:12, kami:"天つ風 云の通ひ路 吹きとぢよ", simo:"をとめの姿 しばしとどめむ"},
+            {id:13, kami:"筑波嶺の みねより落つる みなの川", simo:"恋ぞつもりて 淵となりぬる"},
+            {id:14, kami:"陸奥の しのぶもぢずり 誰ゆゑに", simo:"乱れそめにし われならなくに"},
+            {id:15, kami:"君がため 春の野に出でて 若菜つむ", simo:"わが衣手に 雪は降りつつ"},
+            {id:16, kami:"立ち別れ いなばの山の みねに生ふる", simo:"まつとし聞かば 今帰り来む"},
+            {id:17, kami:"ちはやぶる 神代もきかず 竜田川", simo:"からくれなゐに 水くくるとは"},
+            {id:18, kami:"住の江の 岸による波 よるさへや", simo:"夢の通ひ路 人目よくらむ"},
+            {id:19, kami:"難波潟 みじかき芦の ふしのまも", simo:"逢はでこの世を 過ぐしてよとや"},
+            {id:20, kami:"わびぬれば 今はた同じ 難波なる", simo:"みをつくしても 逢はむとぞ思う"},
+            {id:21, kami:"今来むと いひしばかりに 長月の", simo:"有明の月を 待ち出づるかな"},
+            {id:22, kami:"吹くからに 秋の草木の しをるれば", simo:"むべ山風を あらしといふらむ"},
+            {id:23, kami:"月見れば ちぢにものこそ 悲しけれ", simo:"わが身ひとつの 秋にはあらねど"},
+            {id:24, kami:"このたびは ぬさもとりあへず 手向山", simo:"紅葉の錦 神のまにまに"},
+            {id:25, kami:"名にし負はば 逢坂山の さねかづら", simo:"人にしられで くるよしもがな"},
+            {id:26, kami:"小倉山 みねの紅葉ば 心あらば", simo:"今ひとたびの みゆき待たなむ"},
+            {id:27, kami:"みかきもり 衛士のたく火の 夜は燃え", simo:"昼は消えつつ 物をこそ思へ"},
+            {id:28, kami:"山ざとは 冬ぞ寂しさ まさりける", simo:"人目も草も かれぬと思へば"},
+            {id:29, kami:"心あてに 折らばや折らむ 初霜の", simo:"置きまどはせる 白菊の花"},
+            {id:30, kami:"有明の つれなく見えし 別れより", simo:"暁ばかり 憂きものはなし"},
+            {id:31, kami:"朝ぼらけ 有明の月と みるまでに", simo:"吉野の里に ふれる白雪"},
+            {id:32, kami:"山川に 風のかけたる しがらみは", simo:"流れもあへぬ 紅葉なりけり"},
+            {id:33, kami:"ひさかたの 光のどけき 春の日に", simo:"しづ心なく 花の散るらむ"},
+            {id:34, kami:"誰をかも 知る人にせむ 高砂の", simo:"松も昔の 友ならなくに"},
+            {id:35, kami:"人はいさ 心も知らず ふるさとは", simo:"花ぞ昔の 香ににほひける"},
+            {id:36, kami:"夏の夜は まだ宵ながら 明けぬるを", simo:"雲のいづこに 月宿るらむ"},
+            {id:37, kami:"白露に 風の吹きしく 秋の野は", simo:"つらぬきとめぬ 玉ぞ散りける"},
+            {id:38, kami:"忘らるる 身をば思はず 誓ひてし", simo:"人の命の 惜しくもあるかな"},
+            {id:39, kami:"浅茅生の 小野の篠原 しのぶれど", simo:"あまりてなどか 人の恋しき"},
+            {id:40, kami:"しのぶれど 色に出でにけり わが恋は", simo:"物や思うと 人の問ふまで"},
+            {id:41, kami:"恋すてふ わが名はまだき 立ちにけり", simo:"人知れずこそ 思ひそめしか"},
+            {id:42, kami:"契りきな かたみに袖を しぼりつつ", simo:"末の松山 波越さじとは"},
+            {id:43, kami:"逢ひ見ての のちの心に くらぶれば", simo:"昔は物を 思はざりけり"},
+            {id:44, kami:"逢ふことの たえてしなくは なかなかに", simo:"人をも身をも 恨みざらまし"},
+            {id:45, kami:"あはれとも いふべき人は 思ほえで", simo:"身のいたづらに なりぬべきかな"},
+            {id:46, kami:"由良の門を 渡る舟人 かぢをたえ", simo:"ゆくへも知らぬ 恋の道かな"},
+            {id:47, kami:"八重むぐら しげれる宿の 寂しきに", simo:"人こそ見えね 秋は来にけり"},
+            {id:48, kami:"風をだに 恋ふるはげしき 猛き波", simo:"かけじや袖の ぬれもこそすれ"},
+            {id:49, kami:"みかきもり 衛士のたく火の 夜は燃え", simo:"昼は消えつつ 物をこそ思へ"},
+            {id:50, kami:"君がため 惜しからざりし 命さへ", simo:"長くもがなと 思ひけるかな"},
+            {id:51, kami:"かくとだに えやは伊吹の さしも草", simo:"さしもしらじな 燃ゆる思いを"},
+            {id:52, kami:"明けぬれば くるるものとは 知りながら", simo:"なほうらめしき 朝ぼらけかな"},
+            {id:53, kami:"嘆きつつ ひとりぬる夜の あくる間は", simo:"いかに久しき ものとかは知る"},
+            {id:54, kami:"忘れじの 行く末までは かたければ", simo:"今日を限りの 命ともがな"},
+            {id:55, kami:"滝の音は たえて久しく なりぬれど", simo:"名こそ流れて なほ聞こえけれ"},
+            {id:56, kami:"あらざらむ この世のほかの 思い出に", simo:"今ひとたびの 逢ふこともがな"},
+            {id:57, kami:"めぐりあひて 見しやそれとも わかぬ間に", simo:"雲がくれにし 夜半の月かな"},
+            {id:58, kami:"有馬山 ゐなのささ原 風吹けば", simo:"いでそよ人を 忘れやはする"},
+            {id:59, kami:"やすらはで 寝なましものを 小夜ふけて", simo:"かたぶくまでの 月を見しかな"},
+            {id:60, kami:"大江山 いく野の道の 遠ければ", simo:"まだふみもみず 天の橋立"},
+            {id:61, kami:"いにしへの 奈良の都の 八重桜", simo:"けふ九重に にほひぬるかな"},
+            {id:62, kami:"夜をこめて 鳥のそらねは はかるとも", simo:"よに逢坂の 関はゆるさじ"},
+            {id:63, kami:"今はただ 思ひ絶えなむ とばかりを", simo:"人づてならで 言ふよしもがな"},
+            {id:64, kami:"朝ぼらけ 宇治の川霧 たえだえに", simo:"あらはれわたる 瀬々の網代木"},
+            {id:65, kami:"恨みわび ほさぬ袖だに あるものを", simo:"恋に朽ちなむ 名こそ惜しけれ"},
+            {id:66, kami:"もろともに あはれと思へ 山桜", simo:"花よりほかに 知る人もなし"},
+            {id:67, kami:"春の夜の 夢ばかりなる 手枕に", simo:"かひなく立たむ 名こそ惜しけれ"},
+            {id:68, kami:"心にも あらでうき世に ながらへば", simo:"恋しかるべき 夜半の月かな"},
+            {id:69, kami:"嵐吹く 三室の山の もみぢ葉は", simo:"竜田の川の 錦なりけり"},
+            {id:70, kami:"寂しさに 宿を立ち出でて ながむれば", simo:"いづこも同じ 秋の夕暮れ"},
+            {id:71, kami:"夕されば 門田の稲葉 おとづれて", simo:"芦のまろやに 秋風ぞ吹く"},
+            {id:72, kami:"音にきく たかしの浜の あだ波は", simo:"かけじや袖の ぬれもこそすれ"},
+            {id:73, kami:"高砂の をのへの桜 咲きにけり", simo:"外山の霞 立たずもあらなむ"},
+            {id:74, kami:"憂かりける 人を初瀬の 山おろしよ", simo:"はげしかれとは 祈らぬものを"},
+            {id:75, kami:"契りおきし させもが露を 命にて", simo:"あはれ今年の 秋もいぬめり"},
+            {id:76, kami:"わたの原 漕ぎ出でて見れば ひさかたの", simo:"雲居にまがふ 沖つ白波"},
+            {id:77, kami:"瀬をはやみ 岩にせかるる 滝川の", simo:"われても末に 逢はむとぞ思う"},
+            {id:78, kami:"淡路島 通ふ千鳥の 鳴く声に", simo:"いく夜ねざめぬ 須磨の関守"},
+            {id:79, kami:"秋風に たなびく雲の たえ間より", simo:"もれ出づる月の 影のさやけさ"},
+            {id:80, kami:"長からむ 心も知らず 黒髪の", simo:"乱れて今朝は 物をこそ思へ"},
+            {id:81, kami:"ほととぎす 鳴きつる方を ながむれば", simo:"ただ有明の 月ぞ残れる"},
+            {id:82, kami:"思いわび さても命は あるものを", simo:"憂きにたへぬは 涙なりけり"},
+            {id:83, kami:"世の中よ 道こそなけれ 思い入る", simo:"山の奥にも 鹿ぞ鳴くなる"},
+            {id:84, kami:"ながらへば またこのごろや しのばれむ", simo:"憂しと見し世ぞ 今は恋しき"},
+            {id:85, kami:"夜もすがら 物思うころは 明けやらで", simo:"閨のひまさへ つれなかりけり"},
+            {id:86, kami:"嘆けとて 月やは物を 思はする", simo:"かこち顔なる わが涙かな"},
+            {id:87, kami:"村雨の 露もまだひぬ まきの葉に", simo:"霧立ちのぼる 秋の夕暮れ"},
+            {id:88, kami:"難波江の 芦のかりねの ひとよゆゑ", simo:"みをつくしてや 恋ひわたるべき"},
+            {id:89, kami:"玉の緒よ たえなばたえね ながらへば", simo:"忍ぶることの よわりもぞする"},
+            {id:90, kami:"見せばやな 雄島のあまの 袖だにわ", simo:"濡れにぞ濡れし 色は変わらず"},
+            {id:91, kami:"きりぎりす 鳴くや霜夜の さむしろに", simo:"衣かたしき ひとりかも寝む"},
+            {id:92, kami:"わが袖は 潮干に見えぬ 沖の石の", simo:"人こそしらね 乾く間もなし"},
+            {id:93, kami:"世の中は 常にもがなな 渚こぐ", simo:"あまの小舟の 綱手かなしも"},
+            {id:94, kami:"み吉野の 山の秋風 さ夜ふけて", simo:"ふるさと寒く 衣うつなり"},
+            {id:95, kami:"おほけなく うき世の民に おほふかな", simo:"わが立つ杣に すみぞめの袖"},
+            {id:96, kami:"花さそふ 嵐の庭の 雪ならで", simo:"ふりゆくものは わが身なりけり"},
+            {id:97, kami:"来ぬ人を まつほの浦の 夕なぎに", simo:"焼くや藻塩の 身もこがれつつ"},
+            {id:98, kami:"風そよぐ ならの小川の 夕暮れは", simo:"御禊ぞ夏の しるしなりける"},
+            {id:99, kami:"人も惜し 人も恨めし あぢきなく", simo:"世を思うゆゑに 物思う身は"},
+            {id:100, kami:"ももしきや 古き軒端の しのぶにも", simo:"なほあまりある 昔なりけり"}
+        ];
+
+        let marks = JSON.parse(localStorage.getItem('hyakunin_marks') || '{}');
+        let currentPool = [];
+        let currentIndex = 0;
+        let countCompleted = 0;
+        let isAnswerShowing = false;
+        let quizMode, orderMode;
+        const markValues = ['none', 'warn', 'bad', 'good'];
+
+        function showSetup() {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('setup-page').classList.add('active');
+        }
+
+        function startLearning() {
+            const start = parseInt(document.getElementById('range-start').value);
+            const end = parseInt(document.getElementById('range-end').value);
+            const numFilter = document.getElementById('number-filter').value;
+            const filterMark = document.getElementById('filter-mark').value;
+            quizMode = document.getElementById('quiz-mode').value;
+            orderMode = document.getElementById('order-mode').value;
+
+            currentPool = poemsData.filter(p => {
+                const inRange = p.id >= start && p.id <= end;
+                const matchesNum = (numFilter === 'all') || (numFilter === 'odd' && p.id % 2 !== 0) || (numFilter === 'even' && p.id % 2 === 0);
+                const mark = marks[p.id] || 'none';
+                const matchesMark = (filterMark === 'all') || (mark === filterMark);
+                return inRange && matchesNum && matchesMark;
+            });
+
+            if (currentPool.length === 0) { alert("該当する歌がありません。"); return; }
+            if (orderMode === 'sequential') currentPool.sort((a, b) => a.id - b.id);
+            currentIndex = 0;
+            countCompleted = 0;
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('learning-page').classList.add('active');
+            updateCard();
+        }
+
+        function updateCard() {
+            const p = currentPool[currentIndex];
+            const mark = marks[p.id] || 'none';
+            document.getElementById('poem-id').innerText = `第${p.id}首`;
+            document.getElementById('display-text').innerText = (quizMode === 'kami-to-simo') ? p.kami : p.simo;
+            document.getElementById('mark-btn').className = 'mark-' + mark;
+            document.getElementById('progress-text').innerText = `${countCompleted + 1} / ${currentPool.length}`;
+            document.getElementById('next-btn').innerText = (countCompleted === currentPool.length - 1) ? "結果を見る" : "次の歌へ";
+            isAnswerShowing = false;
+        }
+
+        function toggleAnswer() {
+            const p = currentPool[currentIndex];
+            document.getElementById('display-text').innerText = isAnswerShowing ? 
+                (quizMode === 'kami-to-simo' ? p.kami : p.simo) : 
+                (quizMode === 'kami-to-simo' ? p.simo : p.kami);
+            isAnswerShowing = !isAnswerShowing;
+        }
+
+        function toggleMark(e) {
+            e.stopPropagation();
+            const p = currentPool[currentIndex];
+            let currentMark = marks[p.id] || 'none';
+            marks[p.id] = markValues[(markValues.indexOf(currentMark) + 1) % markValues.length];
+            localStorage.setItem('hyakunin_marks', JSON.stringify(marks));
+            updateCard();
+        }
+
+        function nextPoem() {
+            countCompleted++;
+            if (countCompleted >= currentPool.length) { showResult(); return; }
+            if (orderMode === 'random') {
+                let nextIdx;
+                do { nextIdx = Math.floor(Math.random() * currentPool.length); } while (nextIdx === currentIndex && currentPool.length > 1);
+                currentIndex = nextIdx;
+            } else {
+                currentIndex = (currentIndex + 1) % currentPool.length;
+            }
+            updateCard();
+        }
+
+        function showResult() {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('result-page').classList.add('active');
+            let stats = { none: 0, warn: 0, bad: 0, good: 0 };
+            let badListHtml = "";
+            currentPool.forEach(p => {
+                const m = marks[p.id] || 'none';
+                stats[m]++;
+                if (m === 'bad') badListHtml += `<div>第${p.id}首: ${p.kami.substring(0,12)}...</div>`;
+            });
+            document.getElementById('stat-none').innerText = stats.none;
+            document.getElementById('stat-warn').innerText = stats.warn;
+            document.getElementById('stat-bad').innerText = stats.bad;
+            document.getElementById('stat-good').innerText = stats.good;
+            document.getElementById('bad-list').innerHTML = badListHtml || "赤色の句はありません。";
+            document.getElementById('result-summary').innerText = `${currentPool.length}首の練習を完了`;
+        }
+    </script>
+</body>
+</html>
